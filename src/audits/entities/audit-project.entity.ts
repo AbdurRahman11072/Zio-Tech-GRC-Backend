@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
@@ -83,6 +84,9 @@ export class AuditProject {
   @ManyToOne('User', { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'leadAuditorId' })
   leadAuditor?: User | null;
+
+  @OneToMany('TorClause', 'auditProject')
+  torClauses: any[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
