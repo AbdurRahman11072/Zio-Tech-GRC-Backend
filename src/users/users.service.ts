@@ -1,17 +1,64 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  OnApplicationBootstrap,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import bcrypt from 'bcryptjs';
-import { User } from './entities/user.entity.js';
+import { User, UserRole } from './entities/user.entity.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
   ) {}
+
+  async onApplicationBootstrap() {
+    await this.seedAdmin();
+  }
+
+  async seedAdmin(): Promise<User> {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@ziotech.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123456';
+    const existingAdmin = await this.findByEmail(adminEmail, true);
+
+    if (!existingAdmin) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(adminPassword, salt);
+      const admin = this.userRepository.create({
+        name: 'System Administrator',
+        email: adminEmail,
+        password: hashedPassword,
+        role: UserRole.ADMIN,
+        isActive: true,
+      });
+      const saved = await this.userRepository.save(admin);
+      this.logger.log(`Default Administrator seeded: ${adminEmail} (Role: ${saved.role})`);
+      return saved;
+    } else {
+      let updated = false;
+      if (existingAdmin.role !== UserRole.ADMIN) {
+        existingAdmin.role = UserRole.ADMIN;
+        updated = true;
+      }
+      if (!existingAdmin.isActive) {
+        existingAdmin.isActive = true;
+        updated = true;
+      }
+      if (updated) {
+        await this.userRepository.save(existingAdmin);
+      }
+      this.logger.log(`Verified Administrator account active: ${adminEmail}`);
+      return existingAdmin;
+    }
+  }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     let hashedPassword = createUserDto.password;

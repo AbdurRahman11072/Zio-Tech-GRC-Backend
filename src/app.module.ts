@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
 import { AuditsModule } from './audits/audits.module.js';
 import { TorModule } from './tor/tor.module.js';
+import { DrtModule } from './drt/drt.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { TorModule } from './tor/tor.module.js';
     CompaniesModule,
     AuditsModule,
     TorModule,
+    DrtModule,
   ],
 })
 export class AppModule {}
