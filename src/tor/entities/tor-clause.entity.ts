@@ -33,6 +33,10 @@ export class TorClause {
   sortOrder: number;
 
   @Index()
+  @Column({ type: 'varchar', length: 30, default: 'tor' })
+  clauseType: string;
+
+  @Index()
   @Column({ type: 'uuid' })
   auditProjectId: string;
 

@@ -32,4 +32,8 @@ export class CreateTorClauseDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number;
+
+  @IsOptional()
+  @IsString()
+  clauseType?: string;
 }

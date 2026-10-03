@@ -83,6 +83,11 @@ const multerOptions = {
 export class DrtController {
   constructor(private readonly drtService: DrtService) {}
 
+  @Get('drt')
+  findAll(@Req() req: any) {
+    return this.drtService.findAll(req.user);
+  }
+
   @Get('audits/:auditId/drt')
   findByAuditProject(
     @Param('auditId', ParseUUIDPipe) auditId: string,

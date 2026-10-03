@@ -32,6 +32,26 @@ export class TorService {
     return this.buildTree(allClauses);
   }
 
+  async findAll(type?: string, auditProjectId?: string): Promise<TorClause[]> {
+    const where: any = {};
+    if (type) {
+      where.clauseType = type;
+    }
+    if (auditProjectId) {
+      where.auditProjectId = auditProjectId;
+    }
+    return await this.torRepository.find({
+      where,
+      relations: {
+        auditProject: true,
+        parentClause: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
   async create(
     auditProjectId: string,
     createDto: CreateTorClauseDto,
@@ -55,6 +75,7 @@ export class TorService {
     const clause = this.torRepository.create({
       ...createDto,
       auditProjectId,
+      clauseType: createDto.clauseType || 'tor',
     });
 
     return await this.torRepository.save(clause);

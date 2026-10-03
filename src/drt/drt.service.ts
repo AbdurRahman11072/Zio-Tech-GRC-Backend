@@ -48,6 +48,37 @@ export class DrtService {
     private readonly torRepository: Repository<TorClause>,
   ) {}
 
+  async findAll(currentUser?: User): Promise<DrtRequirement[]> {
+    const where: any = {};
+    if (
+      currentUser &&
+      (currentUser.role === UserRole.AUDITEE ||
+        currentUser.role === UserRole.COMPANY_USER)
+    ) {
+      if (currentUser.companyId) {
+        where.auditProject = { companyId: currentUser.companyId };
+      }
+    }
+
+    return await this.reqRepository.find({
+      where,
+      relations: {
+        auditProject: true,
+        torClause: true,
+        submissions: {
+          submittedBy: true,
+          evidenceFiles: true,
+          reviewRemarks: {
+            reviewer: true,
+          },
+        },
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
   async findByAuditProject(
     auditProjectId: string,
     currentUser?: User,

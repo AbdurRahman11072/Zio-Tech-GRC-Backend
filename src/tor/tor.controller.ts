@@ -23,6 +23,14 @@ import { UserRole } from '../users/entities/user.entity.js';
 export class TorController {
   constructor(private readonly torService: TorService) {}
 
+  @Get('tor')
+  findAll(
+    @Query('type') type?: string,
+    @Query('auditProjectId') auditProjectId?: string,
+  ) {
+    return this.torService.findAll(type, auditProjectId);
+  }
+
   @Get('audits/:auditId/tor')
   findByAuditProject(@Param('auditId', ParseUUIDPipe) auditId: string) {
     return this.torService.findByAuditProject(auditId);
