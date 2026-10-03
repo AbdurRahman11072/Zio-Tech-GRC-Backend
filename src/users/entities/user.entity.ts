@@ -5,6 +5,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 
 export enum UserRole {
@@ -40,6 +42,13 @@ export class User {
   // Optional: Null for internal Zio Tech auditors/admins, set for client company members
   @Column({ type: 'uuid', nullable: true })
   companyId?: string | null;
+
+  @ManyToOne('Company', 'users', {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'companyId' })
+  company?: any;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
