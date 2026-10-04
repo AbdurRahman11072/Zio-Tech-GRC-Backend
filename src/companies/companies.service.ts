@@ -77,4 +77,53 @@ export class CompaniesService {
     await this.companyRepository.remove(company);
     return { message: `Company "${company.name}" removed successfully` };
   }
+
+  async findByName(name: string): Promise<Company | null> {
+    return await this.companyRepository.findOne({
+      where: { name },
+      relations: { users: true },
+    });
+  }
+
+  async updateSubscription(
+    id: string,
+    dto: import('./dto/update-subscription.dto.js').UpdateSubscriptionDto,
+  ): Promise<Company> {
+    const company = await this.findById(id);
+    company.subscriptionPlan = dto.plan;
+    company.subscriptionStatus = dto.status;
+
+    if (dto.maxAudits !== undefined) {
+      company.maxAudits = dto.maxAudits;
+    } else {
+      const { SubscriptionPlan } = await import('./entities/company.entity.js');
+      if (dto.plan === SubscriptionPlan.STARTER) company.maxAudits = 3;
+      else if (dto.plan === SubscriptionPlan.PROFESSIONAL) company.maxAudits = 10;
+      else if (dto.plan === SubscriptionPlan.ENTERPRISE) company.maxAudits = 999;
+      else if (dto.plan === SubscriptionPlan.NONE) company.maxAudits = 0;
+    }
+
+    if (dto.expiresAt) {
+      company.subscriptionExpiresAt = new Date(dto.expiresAt);
+    } else {
+      const { SubscriptionStatus } = await import('./entities/company.entity.js');
+      if (dto.status === SubscriptionStatus.ACTIVE) {
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        company.subscriptionExpiresAt = nextYear;
+      }
+    }
+
+    return await this.companyRepository.save(company);
+  }
+
+  async hasActiveSubscription(companyId: string): Promise<boolean> {
+    const company = await this.findById(companyId);
+    const { SubscriptionStatus } = await import('./entities/company.entity.js');
+    return (
+      company.subscriptionStatus === SubscriptionStatus.ACTIVE ||
+      company.subscriptionStatus === SubscriptionStatus.TRIAL
+    );
+  }
 }
+

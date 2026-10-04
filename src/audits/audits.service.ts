@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +14,8 @@ import {
 import { CreateAuditProjectDto } from './dto/create-audit-project.dto.js';
 import { UpdateAuditProjectDto } from './dto/update-audit-project.dto.js';
 import { UserRole } from '../users/entities/user.entity.js';
+import { CompaniesService } from '../companies/companies.service.js';
+import { SubscriptionStatus } from '../companies/entities/company.entity.js';
 
 interface AuthenticatedUser {
   id: string;
@@ -26,12 +29,39 @@ export class AuditsService {
   constructor(
     @InjectRepository(AuditProject)
     private readonly auditRepository: Repository<AuditProject>,
+    private readonly companiesService: CompaniesService,
   ) {}
 
   async create(
     createDto: CreateAuditProjectDto,
     currentUser?: AuthenticatedUser,
   ): Promise<AuditProject> {
+    const targetCompanyId = createDto.companyId || currentUser?.companyId;
+    if (!targetCompanyId) {
+      throw new BadRequestException('A valid company must be specified to create an audit project');
+    }
+
+    const company = await this.companiesService.findById(targetCompanyId);
+    if (
+      company.subscriptionStatus !== SubscriptionStatus.ACTIVE &&
+      company.subscriptionStatus !== SubscriptionStatus.TRIAL
+    ) {
+      throw new ForbiddenException(
+        'An active subscription plan is required to create an audit project. Please purchase or activate a subscription plan for your organization.',
+      );
+    }
+
+    if (company.maxAudits > 0) {
+      const activeCount = await this.auditRepository.count({
+        where: { companyId: company.id },
+      });
+      if (activeCount >= company.maxAudits) {
+        throw new ForbiddenException(
+          `Your organization's subscription plan allows a maximum of ${company.maxAudits} audit projects. Please upgrade your plan to create more audits.`,
+        );
+      }
+    }
+
     const code =
       createDto.code ||
       `AUD-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -49,6 +79,7 @@ export class AuditsService {
 
     const audit = this.auditRepository.create({
       ...createDto,
+      companyId: targetCompanyId,
       code,
       leadAuditorId,
       status: createDto.status || AuditStatus.DRAFT,

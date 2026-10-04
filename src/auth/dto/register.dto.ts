@@ -23,4 +23,8 @@ export class RegisterDto {
   @IsOptional()
   @IsUUID()
   companyId?: string;
+
+  @IsOptional()
+  @IsString()
+  companyName?: string;
 }

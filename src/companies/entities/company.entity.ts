@@ -15,6 +15,21 @@ export enum CompanyStatus {
   INACTIVE = 'inactive',
 }
 
+export enum SubscriptionPlan {
+  NONE = 'none',
+  STARTER = 'starter',
+  PROFESSIONAL = 'professional',
+  ENTERPRISE = 'enterprise',
+}
+
+export enum SubscriptionStatus {
+  INACTIVE = 'inactive',
+  ACTIVE = 'active',
+  TRIAL = 'trial',
+  PAST_DUE = 'past_due',
+  CANCELLED = 'cancelled',
+}
+
 @Entity('companies')
 export class Company {
   @PrimaryGeneratedColumn('uuid')
@@ -51,6 +66,26 @@ export class Company {
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   contactPhone?: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: SubscriptionPlan,
+    default: SubscriptionPlan.NONE,
+  })
+  subscriptionPlan: SubscriptionPlan;
+
+  @Column({
+    type: 'enum',
+    enum: SubscriptionStatus,
+    default: SubscriptionStatus.INACTIVE,
+  })
+  subscriptionStatus: SubscriptionStatus;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  subscriptionExpiresAt?: Date | null;
+
+  @Column({ type: 'int', default: 0 })
+  maxAudits: number;
 
   @OneToMany(() => User, (user) => user.company)
   users: User[];

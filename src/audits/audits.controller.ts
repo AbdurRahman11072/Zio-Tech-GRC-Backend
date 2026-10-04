@@ -23,12 +23,15 @@ import { UserRole } from '../users/entities/user.entity.js';
 export class AuditsController {
   constructor(private readonly auditsService: AuditsService) {}
 
-  @Roles(UserRole.ADMIN, UserRole.AUDITOR)
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR, UserRole.COMPANY_USER)
   @Post()
   create(
     @Body() createAuditDto: CreateAuditProjectDto,
     @Req() req: { user: any },
   ) {
+    if (req.user?.role === UserRole.COMPANY_USER && req.user?.companyId) {
+      createAuditDto.companyId = req.user.companyId;
+    }
     return this.auditsService.create(createAuditDto, req.user);
   }
 

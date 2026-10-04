@@ -78,11 +78,14 @@ export class UsersService implements OnApplicationBootstrap {
   }
 
   async findAll(): Promise<User[]> {
-    return await this.userRepository.find();
+    return await this.userRepository.find({ relations: { company: true } });
   }
 
   async findById(id: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: { company: true },
+    });
     if (!user) {
       throw new NotFoundException(`User with ID "${id}" not found`);
     }
@@ -93,11 +96,15 @@ export class UsersService implements OnApplicationBootstrap {
     if (includePassword) {
       return await this.userRepository
         .createQueryBuilder('user')
+        .leftJoinAndSelect('user.company', 'company')
         .addSelect('user.password')
         .where('user.email = :email', { email })
         .getOne();
     }
-    return await this.userRepository.findOne({ where: { email } });
+    return await this.userRepository.findOne({
+      where: { email },
+      relations: { company: true },
+    });
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {

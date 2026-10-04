@@ -14,6 +14,7 @@ import {
 import { CompaniesService } from './companies.service.js';
 import { CreateCompanyDto } from './dto/create-company.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
+import { UpdateSubscriptionDto } from './dto/update-subscription.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
@@ -61,6 +62,20 @@ export class CompaniesController {
     @Body() updateCompanyDto: UpdateCompanyDto,
   ) {
     return this.companiesService.update(id, updateCompanyDto);
+  }
+
+  @Patch(':id/subscription')
+  updateSubscription(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateSubscriptionDto: UpdateSubscriptionDto,
+    @Req() req: { user: { role: UserRole; companyId?: string | null } },
+  ) {
+    if (req.user.role !== UserRole.ADMIN && req.user.companyId !== id) {
+      throw new ForbiddenException(
+        'Access denied: You can only manage subscription for your own company',
+      );
+    }
+    return this.companiesService.updateSubscription(id, updateSubscriptionDto);
   }
 
   @Roles(UserRole.ADMIN)
