@@ -304,5 +304,31 @@ export class AuditsService {
     await this.memberRepository.remove(member);
     return { message: 'Member removed from audit successfully' };
   }
+
+  async completeAudit(
+    auditId: string,
+    currentUser?: AuthenticatedUser,
+  ): Promise<{ message: string; audit: AuditProject }> {
+    const audit = await this.findById(auditId, currentUser);
+
+    if (
+      currentUser &&
+      currentUser.role !== UserRole.ADMIN &&
+      currentUser.role !== UserRole.AUDITOR
+    ) {
+      throw new ForbiddenException(
+        'Only Administrators or the Lead Auditor can sign off and complete an audit project.',
+      );
+    }
+
+    audit.status = AuditStatus.COMPLETED;
+    audit.completedDate = new Date();
+    const saved = await this.auditRepository.save(audit);
+
+    return {
+      message: `Audit project "${audit.title}" (${audit.code}) has been successfully completed and certified.`,
+      audit: saved,
+    };
+  }
 }
 

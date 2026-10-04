@@ -25,6 +25,7 @@ import { DrtService } from './drt.service.js';
 import { CreateDrtRequirementDto } from './dto/create-drt-requirement.dto.js';
 import { UpdateDrtRequirementDto } from './dto/update-drt-requirement.dto.js';
 import { ReviewDrtSubmissionDto } from './dto/review-drt-submission.dto.js';
+import { DistributeTasksDto } from './dto/distribute-tasks.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
@@ -153,6 +154,16 @@ export class DrtController {
   }
 
   @Roles(UserRole.ADMIN, UserRole.AUDITOR)
+  @Post('audits/:auditId/distribute-tasks')
+  distributeTasks(
+    @Param('auditId', ParseUUIDPipe) auditId: string,
+    @Body() dto: DistributeTasksDto,
+    @Req() req: any,
+  ) {
+    return this.drtService.distributeTasks(auditId, req.user, dto);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR, UserRole.AUDITEE)
   @Post('drt/:id/review')
   review(
     @Param('id', ParseUUIDPipe) id: string,

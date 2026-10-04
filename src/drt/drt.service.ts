@@ -31,6 +31,7 @@ import { NotificationType } from '../notifications/entities/notification.entity.
 import { CreateDrtRequirementDto } from './dto/create-drt-requirement.dto.js';
 import { UpdateDrtRequirementDto } from './dto/update-drt-requirement.dto.js';
 import { ReviewDrtSubmissionDto } from './dto/review-drt-submission.dto.js';
+import { DistributeTasksDto } from './dto/distribute-tasks.dto.js';
 
 export interface UploadedEvidenceFile {
   filename: string;
@@ -94,6 +95,7 @@ export class DrtService {
       relations: {
         auditProject: true,
         torClause: true,
+        assignedAuditee: true,
         submissions: {
           submittedBy: true,
           evidenceFiles: true,
@@ -154,6 +156,7 @@ export class DrtService {
       where: { auditProjectId },
       relations: {
         torClause: true,
+        assignedAuditee: true,
         submissions: {
           submittedBy: true,
           evidenceFiles: true,
@@ -210,6 +213,7 @@ export class DrtService {
       where: { auditProjectId },
       relations: {
         torClause: true,
+        assignedAuditee: true,
         submissions: {
           submittedBy: true,
           evidenceFiles: true,
@@ -583,6 +587,85 @@ export class DrtService {
     }))!;
   }
 
+  async distributeTasks(
+    auditProjectId: string,
+    currentUser: User,
+    dto: DistributeTasksDto,
+  ): Promise<{
+    message: string;
+    updatedCount: number;
+    assignedAuditeeCount: number;
+  }> {
+    const audit = await this.auditRepository.findOne({
+      where: { id: auditProjectId },
+      relations: {
+        company: true,
+        members: { user: true },
+      },
+    });
+    if (!audit) {
+      throw new NotFoundException(`Audit project "${auditProjectId}" not found`);
+    }
+
+    if (
+      currentUser.role !== UserRole.ADMIN &&
+      currentUser.role !== UserRole.AUDITOR
+    ) {
+      throw new ForbiddenException(
+        'Only Administrators and Lead Auditors can distribute verification tasks.',
+      );
+    }
+
+    const auditeeAssignmentCounts = new Map<string, number>();
+
+    for (const item of dto.assignments) {
+      const requirement = await this.reqRepository.findOne({
+        where: { id: item.requirementId, auditProjectId },
+      });
+      if (requirement) {
+        requirement.assignedAuditeeId = item.auditeeId || null;
+        await this.reqRepository.save(requirement);
+
+        if (item.auditeeId) {
+          const count = auditeeAssignmentCounts.get(item.auditeeId) || 0;
+          auditeeAssignmentCounts.set(item.auditeeId, count + 1);
+        }
+      }
+    }
+
+    // Send notifications to each assigned auditee
+    for (const [auditeeId, count] of auditeeAssignmentCounts.entries()) {
+      const auditeeUser = await this.userRepository.findOne({
+        where: { id: auditeeId },
+      });
+      if (auditeeUser) {
+        await this.notificationsService.create({
+          recipientEmail: auditeeUser.email,
+          recipientUserId: auditeeUser.id,
+          companyId: audit.companyId,
+          auditProjectId: audit.id,
+          title: `Tasks Assigned: ${count} DRT Items in ${audit.code}`,
+          message: `The Lead Auditor has assigned you ${count} verification task(s) for audit project "${audit.title}" (${audit.code}). Please review the submitted evidence documents.`,
+          type: NotificationType.TASK_ASSIGNED,
+          metadata: {
+            auditId: audit.id,
+            auditCode: audit.code,
+            auditTitle: audit.title,
+            assignedCount: count,
+            assignedBy: currentUser.name,
+            assignedAt: new Date().toISOString(),
+          },
+        });
+      }
+    }
+
+    return {
+      message: `Successfully distributed verification tasks across ${auditeeAssignmentCounts.size} auditee reviewer(s).`,
+      updatedCount: dto.assignments.length,
+      assignedAuditeeCount: auditeeAssignmentCounts.size,
+    };
+  }
+
   async reviewSubmission(
     requirementId: string,
     reviewer: User,
@@ -633,10 +716,39 @@ export class DrtService {
       status: newStatus,
     });
 
+    // Notify organization if revision requested
+    if (newStatus === DrtRequirementStatus.REVISION_REQUIRED) {
+      const audit = await this.auditRepository.findOne({
+        where: { id: requirement.auditProjectId },
+        relations: { company: true },
+      });
+      if (audit?.company) {
+        const orgEmail =
+          audit.company.contactEmail ||
+          `compliance@${audit.company.domain || 'organization.com'}`;
+        await this.notificationsService.create({
+          recipientEmail: orgEmail,
+          companyId: audit.companyId,
+          auditProjectId: audit.id,
+          title: `Revision Requested: ${requirement.code} in ${audit.code}`,
+          message: `Reviewer ${reviewer.name} requested revision on requirement "${requirement.code} - ${requirement.title}": "${reviewDto.comment}". Please re-upload updated compliance documentation.`,
+          type: NotificationType.GENERAL,
+          metadata: {
+            requirementId,
+            requirementCode: requirement.code,
+            reviewerName: reviewer.name,
+            comment: reviewDto.comment,
+            requestedAt: new Date().toISOString(),
+          },
+        });
+      }
+    }
+
     return (await this.reqRepository.findOne({
       where: { id: requirementId },
       relations: {
         torClause: true,
+        assignedAuditee: true,
         submissions: {
           submittedBy: true,
           evidenceFiles: true,

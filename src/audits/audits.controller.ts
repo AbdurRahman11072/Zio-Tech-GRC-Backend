@@ -59,6 +59,15 @@ export class AuditsController {
     return this.auditsService.update(id, updateAuditDto, req.user);
   }
 
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR)
+  @Post(':id/complete')
+  complete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: { user: any },
+  ) {
+    return this.auditsService.completeAudit(id, req.user);
+  }
+
   @Roles(UserRole.ADMIN)
   @Delete(':id')
   remove(

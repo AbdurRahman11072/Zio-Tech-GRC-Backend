@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { AuditProject } from '../../audits/entities/audit-project.entity.js';
 import { TorClause } from '../../tor/entities/tor-clause.entity.js';
+import { User } from '../../users/entities/user.entity.js';
 import type { DrtSubmission } from './drt-submission.entity.js';
 
 export enum DrtRequirementStatus {
@@ -67,6 +68,14 @@ export class DrtRequirement {
   @ManyToOne(() => TorClause, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'torClauseId' })
   torClause?: TorClause | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  assignedAuditeeId?: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'assignedAuditeeId' })
+  assignedAuditee?: User | null;
 
   @OneToMany('DrtSubmission', 'requirement')
   submissions: DrtSubmission[];
