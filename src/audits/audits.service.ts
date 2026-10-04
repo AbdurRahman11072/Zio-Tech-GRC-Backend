@@ -11,8 +11,13 @@ import {
   AuditProject,
   AuditStatus,
 } from './entities/audit-project.entity.js';
+import {
+  AuditMember,
+  AuditMemberRole,
+} from './entities/audit-member.entity.js';
 import { CreateAuditProjectDto } from './dto/create-audit-project.dto.js';
 import { UpdateAuditProjectDto } from './dto/update-audit-project.dto.js';
+import { AddAuditMemberDto } from './dto/add-audit-member.dto.js';
 import { UserRole } from '../users/entities/user.entity.js';
 import { CompaniesService } from '../companies/companies.service.js';
 import { SubscriptionStatus } from '../companies/entities/company.entity.js';
@@ -29,6 +34,8 @@ export class AuditsService {
   constructor(
     @InjectRepository(AuditProject)
     private readonly auditRepository: Repository<AuditProject>,
+    @InjectRepository(AuditMember)
+    private readonly memberRepository: Repository<AuditMember>,
     private readonly companiesService: CompaniesService,
   ) {}
 
@@ -82,12 +89,38 @@ export class AuditsService {
       companyId: targetCompanyId,
       code,
       leadAuditorId,
+      guidelineCategoryId: createDto.guidelineCategoryId || null,
       status: createDto.status || AuditStatus.DRAFT,
       startDate: createDto.startDate ? new Date(createDto.startDate) : null,
       targetDate: createDto.targetDate ? new Date(createDto.targetDate) : null,
     });
 
     const saved = await this.auditRepository.save(audit);
+
+    // Save lead auditor as audit member
+    if (leadAuditorId) {
+      const leadMember = this.memberRepository.create({
+        auditProjectId: saved.id,
+        userId: leadAuditorId,
+        roleInAudit: AuditMemberRole.LEAD_AUDITOR,
+      });
+      await this.memberRepository.save(leadMember);
+    }
+
+    // Save auditee members
+    if (createDto.auditeeIds && Array.isArray(createDto.auditeeIds)) {
+      for (const auditeeId of createDto.auditeeIds) {
+        if (auditeeId && auditeeId !== leadAuditorId) {
+          const auditeeMember = this.memberRepository.create({
+            auditProjectId: saved.id,
+            userId: auditeeId,
+            roleInAudit: AuditMemberRole.AUDITEE_REVIEWER,
+          });
+          await this.memberRepository.save(auditeeMember);
+        }
+      }
+    }
+
     return await this.findById(saved.id, currentUser);
   }
 
@@ -103,14 +136,24 @@ export class AuditsService {
       }
       return await this.auditRepository.find({
         where: { companyId: currentUser.companyId },
-        relations: { company: true, leadAuditor: true },
+        relations: {
+          company: true,
+          leadAuditor: true,
+          guidelineCategory: true,
+          members: { user: true },
+        },
         order: { createdAt: 'DESC' },
       });
     }
 
     // Admins and auditors can view all audit projects
     return await this.auditRepository.find({
-      relations: { company: true, leadAuditor: true },
+      relations: {
+        company: true,
+        leadAuditor: true,
+        guidelineCategory: true,
+        members: { user: true },
+      },
       order: { createdAt: 'DESC' },
     });
   }
@@ -121,7 +164,12 @@ export class AuditsService {
   ): Promise<AuditProject> {
     const audit = await this.auditRepository.findOne({
       where: { id },
-      relations: { company: true, leadAuditor: true },
+      relations: {
+        company: true,
+        leadAuditor: true,
+        guidelineCategory: true,
+        members: { user: true },
+      },
     });
 
     if (!audit) {
@@ -185,4 +233,76 @@ export class AuditsService {
       message: `Audit project "${audit.title}" (${audit.code}) removed successfully`,
     };
   }
+
+  // --- Audit Member Management ---
+
+  async getMembers(
+    auditId: string,
+    currentUser?: AuthenticatedUser,
+  ): Promise<AuditMember[]> {
+    await this.findById(auditId, currentUser);
+    return await this.memberRepository.find({
+      where: { auditProjectId: auditId },
+      relations: { user: true },
+      order: { assignedAt: 'ASC' },
+    });
+  }
+
+  async addMember(
+    auditId: string,
+    addDto: AddAuditMemberDto,
+    currentUser?: AuthenticatedUser,
+  ): Promise<AuditMember> {
+    const audit = await this.findById(auditId, currentUser);
+
+    // Auditor or Admin can add members. Lead Auditor of the audit can also add.
+    if (
+      currentUser &&
+      currentUser.role !== UserRole.ADMIN &&
+      currentUser.role !== UserRole.AUDITOR &&
+      currentUser.role !== UserRole.COMPANY_USER
+    ) {
+      throw new ForbiddenException('You do not have permission to add members to this audit');
+    }
+
+    const existing = await this.memberRepository.findOne({
+      where: { auditProjectId: auditId, userId: addDto.userId },
+    });
+    if (existing) {
+      throw new ConflictException('User is already assigned to this audit project');
+    }
+
+    const member = this.memberRepository.create({
+      auditProjectId: auditId,
+      userId: addDto.userId,
+      roleInAudit: addDto.roleInAudit || AuditMemberRole.AUDITEE_REVIEWER,
+    });
+
+    const saved = await this.memberRepository.save(member);
+    const reloaded = await this.memberRepository.findOne({
+      where: { id: saved.id },
+      relations: { user: true },
+    });
+    return reloaded!;
+  }
+
+  async removeMember(
+    auditId: string,
+    memberId: string,
+    currentUser?: AuthenticatedUser,
+  ): Promise<{ message: string }> {
+    await this.findById(auditId, currentUser);
+
+    const member = await this.memberRepository.findOne({
+      where: { id: memberId, auditProjectId: auditId },
+      relations: { user: true },
+    });
+    if (!member) {
+      throw new NotFoundException(`Audit member "${memberId}" not found in this audit`);
+    }
+
+    await this.memberRepository.remove(member);
+    return { message: 'Member removed from audit successfully' };
+  }
 }
+

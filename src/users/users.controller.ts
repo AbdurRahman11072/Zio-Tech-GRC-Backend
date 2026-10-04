@@ -8,6 +8,7 @@ import {
   Delete,
   ParseUUIDPipe,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
@@ -28,10 +29,10 @@ export class UsersController {
     return this.usersService.create(createUserDto);
   }
 
-  @Roles(UserRole.ADMIN, UserRole.AUDITOR)
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR, UserRole.COMPANY_USER)
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query('role') role?: UserRole) {
+    return this.usersService.findAll(role);
   }
 
   @Get(':id')

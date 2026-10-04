@@ -13,6 +13,7 @@ import {
 import { AuditsService } from './audits.service.js';
 import { CreateAuditProjectDto } from './dto/create-audit-project.dto.js';
 import { UpdateAuditProjectDto } from './dto/update-audit-project.dto.js';
+import { AddAuditMemberDto } from './dto/add-audit-member.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
@@ -66,4 +67,35 @@ export class AuditsController {
   ) {
     return this.auditsService.remove(id, req.user);
   }
+
+  // --- Audit Member Endpoints ---
+
+  @Get(':id/members')
+  getMembers(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: { user: any },
+  ) {
+    return this.auditsService.getMembers(id, req.user);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR, UserRole.COMPANY_USER)
+  @Post(':id/members')
+  addMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() addMemberDto: AddAuditMemberDto,
+    @Req() req: { user: any },
+  ) {
+    return this.auditsService.addMember(id, addMemberDto, req.user);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR)
+  @Delete(':id/members/:memberId')
+  removeMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Req() req: { user: any },
+  ) {
+    return this.auditsService.removeMember(id, memberId, req.user);
+  }
 }
+

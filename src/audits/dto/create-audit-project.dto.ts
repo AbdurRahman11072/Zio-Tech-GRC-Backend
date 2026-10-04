@@ -46,11 +46,19 @@ export class CreateAuditProjectDto {
   @IsDateString()
   targetDate?: string;
 
-  @IsNotEmpty({ message: 'Company ID is required' })
+  @IsOptional()
   @IsUUID('4', { message: 'Valid company UUID is required' })
-  companyId: string;
+  companyId?: string;
 
   @IsOptional()
   @IsUUID('4', { message: 'Lead auditor must be a valid UUID' })
   leadAuditorId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'Guideline category must be a valid UUID' })
+  guidelineCategoryId?: string;
+
+  @IsOptional()
+  @IsUUID('4', { each: true, message: 'Each auditee must be a valid UUID' })
+  auditeeIds?: string[];
 }

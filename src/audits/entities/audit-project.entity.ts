@@ -85,6 +85,16 @@ export class AuditProject {
   @JoinColumn({ name: 'leadAuditorId' })
   leadAuditor?: User | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  guidelineCategoryId?: string | null;
+
+  @ManyToOne('GuidelineCategory', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'guidelineCategoryId' })
+  guidelineCategory?: any | null;
+
+  @OneToMany('AuditMember', 'auditProject')
+  members: any[];
+
   @OneToMany('TorClause', 'auditProject')
   torClauses: any[];
 

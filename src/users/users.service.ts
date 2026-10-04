@@ -77,8 +77,16 @@ export class UsersService implements OnApplicationBootstrap {
     return await this.userRepository.save(user);
   }
 
-  async findAll(): Promise<User[]> {
-    return await this.userRepository.find({ relations: { company: true } });
+  async findAll(role?: UserRole): Promise<User[]> {
+    const where: any = {};
+    if (role) {
+      where.role = role;
+    }
+    return await this.userRepository.find({
+      where,
+      relations: { company: true },
+      order: { name: 'ASC' },
+    });
   }
 
   async findById(id: string): Promise<User> {
