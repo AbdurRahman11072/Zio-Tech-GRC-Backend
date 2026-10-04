@@ -11,6 +11,10 @@ import {
   AuditProject,
   AuditStatus,
 } from '../audits/entities/audit-project.entity.js';
+import {
+  DrtRequirement,
+  DrtRequirementStatus,
+} from '../drt/entities/drt-requirement.entity.js';
 import { CreateTorClauseDto } from './dto/create-tor-clause.dto.js';
 import { UpdateTorClauseDto } from './dto/update-tor-clause.dto.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -35,6 +39,8 @@ export class TorService {
     private readonly torRepository: Repository<TorClause>,
     @InjectRepository(AuditProject)
     private readonly auditRepository: Repository<AuditProject>,
+    @InjectRepository(DrtRequirement)
+    private readonly drtReqRepository: Repository<DrtRequirement>,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -315,6 +321,44 @@ export class TorService {
     // Advance audit status to FIELDWORK (Evidence upload phase)
     audit.status = AuditStatus.FIELDWORK;
     const updatedAudit = await this.auditRepository.save(audit);
+
+    // Auto-provision DRT requirements for all leaf clauses if not already created
+    const allClauses = await this.torRepository.find({
+      where: { auditProjectId },
+      order: { sortOrder: 'ASC', clauseNumber: 'ASC' },
+    });
+    const parentClauseIds = new Set(
+      allClauses.map((c) => c.parentClauseId).filter(Boolean) as string[],
+    );
+    const leafClauses = allClauses.filter((c) => !parentClauseIds.has(c.id));
+
+    const existingReqs = await this.drtReqRepository.find({
+      where: { auditProjectId },
+    });
+    const existingClauseIds = new Set(
+      existingReqs.map((r) => r.torClauseId).filter(Boolean),
+    );
+
+    const newReqs = leafClauses
+      .filter((c) => !existingClauseIds.has(c.id))
+      .map((c) =>
+        this.drtReqRepository.create({
+          auditProjectId,
+          torClauseId: c.id,
+          code: `DRT-${c.clauseNumber}`,
+          title: `Evidence for ${c.clauseNumber}: ${c.title}`,
+          description:
+            c.objective ||
+            `Compliance evidence artifacts and documentation supporting ${c.clauseNumber}.`,
+          guidance: `Upload verified policy documents, SOPs, architectural diagrams, system configurations, or test logs demonstrating compliance with ${c.title}.`,
+          isMandatory: true,
+          status: DrtRequirementStatus.PENDING,
+        }),
+      );
+
+    if (newReqs.length > 0) {
+      await this.drtReqRepository.save(newReqs);
+    }
 
     // Resolve Organization recipient email
     const company = audit.company;

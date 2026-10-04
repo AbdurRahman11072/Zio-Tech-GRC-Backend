@@ -96,6 +96,27 @@ export class DrtController {
     return this.drtService.findByAuditProject(auditId, req.user);
   }
 
+  @Get('audits/:auditId/drt/progress')
+  getProgress(
+    @Param('auditId', ParseUUIDPipe) auditId: string,
+    @Req() req: any,
+  ) {
+    return this.drtService.getAuditDrtProgress(auditId, req.user);
+  }
+
+  @Post('audits/:auditId/drt/sync-tor')
+  syncFromTor(@Param('auditId', ParseUUIDPipe) auditId: string) {
+    return this.drtService.syncFromTorClauses(auditId);
+  }
+
+  @Post('audits/:auditId/drt/submit-all')
+  submitAllEvidence(
+    @Param('auditId', ParseUUIDPipe) auditId: string,
+    @Req() req: any,
+  ) {
+    return this.drtService.submitAllEvidence(auditId, req.user);
+  }
+
   @Roles(UserRole.ADMIN, UserRole.AUDITOR)
   @Post('audits/:auditId/drt')
   create(
