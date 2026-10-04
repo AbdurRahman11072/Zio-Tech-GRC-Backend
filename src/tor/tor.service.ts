@@ -2,16 +2,30 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TorClause } from './entities/tor-clause.entity.js';
-import { AuditProject } from '../audits/entities/audit-project.entity.js';
+import {
+  AuditProject,
+  AuditStatus,
+} from '../audits/entities/audit-project.entity.js';
 import { CreateTorClauseDto } from './dto/create-tor-clause.dto.js';
 import { UpdateTorClauseDto } from './dto/update-tor-clause.dto.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationType } from '../notifications/entities/notification.entity.js';
+import { UserRole } from '../users/entities/user.entity.js';
 
 export interface TorClauseTreeNode extends TorClause {
   children: TorClauseTreeNode[];
+}
+
+interface AuthenticatedUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  companyId?: string | null;
 }
 
 @Injectable()
@@ -21,6 +35,7 @@ export class TorService {
     private readonly torRepository: Repository<TorClause>,
     @InjectRepository(AuditProject)
     private readonly auditRepository: Repository<AuditProject>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findByAuditProject(auditProjectId: string): Promise<TorClauseTreeNode[]> {
@@ -252,6 +267,89 @@ export class TorService {
     await this.torRepository.remove(clause);
     return {
       message: `TOR clause "${clause.clauseNumber} - ${clause.title}" deleted successfully`,
+    };
+  }
+
+  async finalizeTor(
+    auditProjectId: string,
+    currentUser?: AuthenticatedUser,
+  ): Promise<{
+    message: string;
+    audit: AuditProject;
+    clauseCount: number;
+    recipientEmail: string;
+    notificationId: string;
+  }> {
+    const audit = await this.auditRepository.findOne({
+      where: { id: auditProjectId },
+      relations: {
+        company: { users: true },
+        leadAuditor: true,
+        guidelineCategory: true,
+        members: { user: true },
+      },
+    });
+
+    if (!audit) {
+      throw new NotFoundException(`Audit project with ID "${auditProjectId}" not found`);
+    }
+
+    if (
+      currentUser &&
+      currentUser.role !== UserRole.ADMIN &&
+      currentUser.role !== UserRole.AUDITOR
+    ) {
+      throw new ForbiddenException('Only the Lead Auditor or an Administrator can finalize Terms of Reference (TOR)');
+    }
+
+    const clauseCount = await this.torRepository.count({
+      where: { auditProjectId },
+    });
+
+    if (clauseCount === 0) {
+      throw new BadRequestException(
+        'Cannot finalize Terms of Reference (TOR): At least one TOR clause must be defined before publication.',
+      );
+    }
+
+    // Advance audit status to FIELDWORK (Evidence upload phase)
+    audit.status = AuditStatus.FIELDWORK;
+    const updatedAudit = await this.auditRepository.save(audit);
+
+    // Resolve Organization recipient email
+    const company = audit.company;
+    const targetEmail =
+      company?.contactEmail ||
+      company?.users?.find(
+        (u) => u.role === UserRole.COMPANY_USER || u.role === UserRole.AUDITEE,
+      )?.email ||
+      company?.users?.[0]?.email ||
+      `compliance@${company?.domain || 'organization.com'}`;
+
+    // Dispatch email & notification to organization
+    const notification = await this.notificationsService.create({
+      recipientEmail: targetEmail,
+      companyId: audit.companyId,
+      auditProjectId: audit.id,
+      title: `Action Required: Terms of Reference Finalized for ${audit.code}`,
+      message: `The Lead Auditor has finalized ${clauseCount} Terms of Reference (TOR) clauses for audit project "${audit.title}" (${audit.code}). Please upload the required compliance evidence files and documentation against each TOR clause.`,
+      type: NotificationType.TOR_FINALIZED_UPLOAD_REQUIRED,
+      metadata: {
+        auditId: audit.id,
+        auditCode: audit.code,
+        auditTitle: audit.title,
+        clauseCount,
+        leadAuditorName: audit.leadAuditor?.name || 'Lead Auditor',
+        finalizedAt: new Date().toISOString(),
+      },
+    });
+
+    return {
+      message: `Terms of Reference (TOR) finalized with ${clauseCount} clauses. Official notification and email dispatched to organization (${targetEmail}).`,
+      audit: updatedAudit,
+      clauseCount,
+      recipientEmail: targetEmail,
+      notificationId: notification.id,
     };
   }
 

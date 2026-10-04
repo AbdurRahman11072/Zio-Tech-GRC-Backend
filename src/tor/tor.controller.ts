@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   UseGuards,
   Query,
+  Req,
 } from '@nestjs/common';
 import { TorService } from './tor.service.js';
 import { CreateTorClauseDto } from './dto/create-tor-clause.dto.js';
@@ -52,6 +53,15 @@ export class TorController {
     @Query('framework') framework: string,
   ) {
     return this.torService.importFrameworkTemplate(auditId, framework || 'ISO_27001');
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.AUDITOR)
+  @Post('audits/:auditId/tor/finalize')
+  finalize(
+    @Param('auditId', ParseUUIDPipe) auditId: string,
+    @Req() req: { user: any },
+  ) {
+    return this.torService.finalizeTor(auditId, req.user);
   }
 
   @Roles(UserRole.ADMIN, UserRole.AUDITOR)

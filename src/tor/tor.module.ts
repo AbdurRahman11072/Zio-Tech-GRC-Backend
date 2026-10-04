@@ -4,9 +4,13 @@ import { TorClause } from './entities/tor-clause.entity.js';
 import { AuditProject } from '../audits/entities/audit-project.entity.js';
 import { TorService } from './tor.service.js';
 import { TorController } from './tor.controller.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TorClause, AuditProject])],
+  imports: [
+    TypeOrmModule.forFeature([TorClause, AuditProject]),
+    NotificationsModule,
+  ],
   controllers: [TorController],
   providers: [TorService],
   exports: [TorService, TypeOrmModule],
