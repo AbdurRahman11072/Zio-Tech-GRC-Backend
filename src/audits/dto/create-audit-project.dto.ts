@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import {
   AuditFramework,
@@ -26,12 +27,19 @@ export class CreateAuditProjectDto {
   @IsString()
   description?: string;
 
-  @IsOptional()
-  @IsEnum(AuditFramework)
+  // Only validate enum if the field is actually present in the request body.
+  // With transform:true in ValidationPipe, @IsOptional alone can fire @IsEnum
+  // on undefined values. @ValidateIf ensures the check is fully skipped.
+  @ValidateIf((o) => o.framework !== undefined && o.framework !== null)
+  @IsEnum(AuditFramework, {
+    message: `framework must be one of: ${Object.values(AuditFramework).join(', ')}`,
+  })
   framework?: AuditFramework;
 
-  @IsOptional()
-  @IsEnum(AuditStatus)
+  @ValidateIf((o) => o.status !== undefined && o.status !== null)
+  @IsEnum(AuditStatus, {
+    message: `status must be one of: ${Object.values(AuditStatus).join(', ')}`,
+  })
   status?: AuditStatus;
 
   @IsOptional()
